@@ -17,7 +17,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: url('image/vector-pixel-art-bright-landscape-with-sun-river-background-illustration_950839-32.avif') center/cover no-repeat;
+  background: url('/image/vector-pixel-art-bright-landscape-with-sun-river-background-illustration_950839-32.avif') center/cover no-repeat;
 }
 
 /* ── Outer screen frame ── */

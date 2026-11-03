@@ -131,7 +131,7 @@ function HomePage({
       <div className="stats-row">
         <div className="stat-card">
           <img
-            src="image/book.png"
+            src="/image/book.png"
             alt="Logo"
             className="logo-iconB"
           />
@@ -142,7 +142,7 @@ function HomePage({
         </div>
         <div className="stat-card stat-card--green">
           <img
-            src="image/check.png"
+            src="/image/check.png"
             alt="Logo"
             className="logo-iconT"
           />
@@ -153,7 +153,7 @@ function HomePage({
         </div>
         <div className="stat-card">
           <img
-            src="image/hourglass.png"
+            src="/image/hourglass.png"
             alt="Logo"
             className="logo-iconT"
           />
@@ -512,7 +512,7 @@ export default function MainApp({ avatar }) {
         <aside className="sidebar">
           <div className="logo-row">
             <img
-              src="image/logo.png"
+              src="/image/logo.png"
               alt="Logo"
               className="logo-iconL"
             />
@@ -538,12 +538,12 @@ export default function MainApp({ avatar }) {
           ))}
           <div className="sidebar-deco">
             <img
-              src="image/tree.png"
+              src="/image/tree.png"
               alt="Logo"
               className="logo-iconT"
             />
             <img
-              src="image/tree.png"
+              src="/image/tree.png"
               alt="Logo"
               className="logo-iconT"
             />
