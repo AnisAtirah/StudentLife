@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connecting Spotify…</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif; background: #fffaeb; color: #1d2b0b; }
+  </style>
+</head>
+<body>
+  <p id="msg">Connecting Spotify…</p>
+  <script>
+    // Spotify sends the login result here. Pass it back to the StudentLife tab that opened
+    // this popup. The app's address travels inside "state", so we only ever post to it.
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var state = params.get("state") || "";
+      var origin = state.split("|")[1] || "";
+      var ok = /^https?:\/\/[^/]+$/.test(origin);
+      if (window.opener && ok) {
+        window.opener.postMessage(
+          { type: "spotify-auth", code: params.get("code"), error: params.get("error"), state: state },
+          origin
+        );
+        window.close();
+      } else if (ok) {
+        // Lost the link to the opener (or the login ran in this tab): hand the result
+        // to the app through its address instead; it finishes connecting on load.
+        var back = new URL(origin + "/");
+        if (params.get("code")) back.searchParams.set("spotify_code", params.get("code"));
+        if (params.get("error")) back.searchParams.set("spotify_error", params.get("error"));
+        back.searchParams.set("spotify_state", state);
+        location.replace(back.href);
+      } else {
+        document.getElementById("msg").textContent =
+          "Spotify login finished. You can close this window and go back to StudentLife.";
+      }
+    })();
+  </script>
+</body>
+</html>

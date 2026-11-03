@@ -1,57 +1,60 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import {
+  useUserCollection,
+  addTask as dbAddTask,
+  updateTask,
+  deleteTask as dbDeleteTask,
+  addCourse as dbAddCourse,
+  deleteCourse as dbDeleteCourse,
+  updateCourse as dbUpdateCourse,
+} from "./db";
+import CoursesPage, { normalizeUrl } from "./CoursesPage";
+import CalendarPage, { ExamCountdowns } from "./CalendarPage";
+import { daysUntil, todayKey } from "./dateUtils";
+import {
+  addEvent as dbAddEvent,
+  deleteEvent as dbDeleteEvent,
+  addGoal as dbAddGoal,
+  updateGoal as dbUpdateGoal,
+  deleteGoal as dbDeleteGoal,
+} from "./db";
+import FocusPage from "./FocusPage";
+import Pet from "./Pet";
+import { usePomodoro, formatClock, MODE_LABELS } from "./usePomodoro";
+import { FloatingTimer, PopOutTimer, usePopOut } from "./FloatingTimer";
+import { useSpotify } from "./spotify";
+import Wardrobe, { LevelUpModal, ProgressBadge } from "./Wardrobe";
+import { REWARDS, currentStreak, levelInfo, nextStreak } from "./rewards";
+import { playSound } from "./sounds";
 
 
+// Colors from the Canva design: label color and row background per priority
 const PRIORITY_COLORS = {
-  Important: "#e53935",
-  "Due Soon": "#f9a825",
-  Medium: "#43a047",
-  Low: "#8e24aa",
+  Important: "#b3261e",
+  "Due Soon": "#ee8a3c",
+  Medium: "#6b6b6b",
+  Low: "#6b6b6b",
 };
 
 const PRIORITY_BG = {
-  Important: "#f28b8255",
-  "Due Soon": "#fdd66355",
-  Medium: "#ccff9055",
-  Low: "#d0bcff55",
+  Important: "#a6d696",
+  "Due Soon": "#fff7c7",
+  Medium: "#e1f4fb",
+  Low: "#ecc9f4",
 };
 
-const PRIORITY_BORDER = {
-  Important: "#f28b82",
-  "Due Soon": "#fdd663",
-  Medium: "#ccff90",
-  Low: "#d0bcff",
-};
-
-const INITIAL_TASKS = [
-  {
-    id: 1,
-    code: "WIA2001",
-    name: "Lab Report",
-    description: "Write full report on data structures lab work.",
-    link: "https://docs.google.com",
-    date: "2026-06-03",
-    priority: "Important",
-    done: false
-  },
-  {
-    id: 2,
-    code: "WIA2003",
-    name: "Assignment 2",
-    description: "OS scheduling algorithms exercise.",
-    link: "https://docs.google.com",
-    date: "2026-06-05",
-    priority: "Due Soon",
-    done: false
-  },
-];
-
-const INITIAL_COURSES = [
-  { id: 1, code: "WIA2001", name: "Data Structures" },
-  { id: 2, code: "WIA2003", name: "Operating Systems" },
-  { id: 3, code: "WIA2004", name: "Computer Networks" },
-  { id: 4, code: "WIA2005", name: "Software Engineering" },
-];
+/* Short, friendly label for a task link, e.g. "Google Docs link". */
+function linkLabel(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (host === "docs.google.com") return "Google Docs link";
+    if (host === "drive.google.com") return "Google Drive link";
+    return host;
+  } catch {
+    return url.slice(0, 30);
+  }
+}
 
 const FILTERS = ["All", "Important", "Due Soon", "Medium", "Low", "Completed"];
 
@@ -62,21 +65,19 @@ function fmtDate(d) {
   return `${months[parseInt(m) - 1]} ${dd} ${y}`;
 }
 
-//Due Soon Logic (Due in 3 days)
+function dueLabel(days) {
+  if (days === null) return "";
+  if (days < 0) return "Overdue";
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return `in ${days} days`;
+}
+
+// Due Soon logic: anything due within 3 days
 function getDisplayPriority(task) {
   if (task.done) return task.priority;
-
-  const today = new Date();
-  const dueDate = new Date(task.date);
-
-  const diffDays = Math.ceil(
-    (dueDate - today) / (1000 * 60 * 60 * 24)
-  );
-
-  if (diffDays <= 3 && diffDays >= 0) {
-    return "Due Soon";
-  }
-
+  const days = daysUntil(task.date);
+  if (days !== null && days >= 0 && days <= 3) return "Due Soon";
   return task.priority;
 }
 
@@ -90,15 +91,14 @@ function HomePage({
   filter,
   onFilterChange,
   courseFilter,
-  onCourseFilterChange
+  onCourseFilterChange,
+  loading,
+  events
 }) {
   const total = tasks.length;
   const done = tasks.filter(t => t.done).length;
   const inprog = total - done;
   const [openTaskId, setOpenTaskId] = useState(null);
-  const toggleExpand = (id) => {
-  setOpenTaskId(prev => (prev === id ? null : id));
-};
 
   const filtered = tasks.filter(t => {
     const displayPriority = getDisplayPriority(t);
@@ -125,48 +125,52 @@ function HomePage({
     return 0;
   });
 
+  // Nearest unfinished task that isn't overdue, for the countdown card
+  const nextTask = tasks
+    .filter(t => !t.done && daysUntil(t.date) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const nextDays = nextTask ? daysUntil(nextTask.date) : null;
+
   return (
     <>
       {/* Stats */}
       <div className="stats-row">
-        <div className="stat-card">
-          <img
-            src="/image/book.png"
-            alt="Logo"
-            className="logo-iconB"
-          />
-          <div>
-            <div className="stat-label">Total Task</div>
-            <div className="stat-value">{total}</div>
+        {[
+          { icon: "/image/book.png", label: "Total Task", value: total, tone: "blue" },
+          { icon: "/image/check.png", label: "Completed", value: done, tone: "green" },
+          { icon: "/image/hourglass.png", label: "In Progress", value: inprog, tone: "yellow" },
+        ].map(s => (
+          <div key={s.label} className="stat-card">
+            <div className={`stat-icon-tile stat-icon-tile--${s.tone}`}>
+              <img src={s.icon} alt="" className="stat-icon" />
+            </div>
+            <div className="stat-text">
+              <div className="stat-label">{s.label}</div>
+              <div className="stat-value">{s.value}</div>
+            </div>
           </div>
-        </div>
-        <div className="stat-card stat-card--green">
-          <img
-            src="/image/check.png"
-            alt="Logo"
-            className="logo-iconT"
-          />
-          <div>
-            <div className="stat-label">Completed</div>
-            <div className="stat-value">{done}</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <img
-            src="/image/hourglass.png"
-            alt="Logo"
-            className="logo-iconT"
-          />
-          <div>
-            <div className="stat-label">In Progress</div>
-            <div className="stat-value">{inprog}</div>
-          </div>
-        </div>
+        ))}
       </div>
 
+      <div className="home-grid">
       {/* Task Panel */}
       <div className="task-panel">
-        <div className="task-panel__title">Upcoming Tasks</div>
+        <div className="panel-head">
+          <div className="task-panel__title">Upcoming Task</div>
+          <select
+            className="form-select course-select"
+            value={courseFilter}
+            onChange={(e) => onCourseFilterChange(e.target.value)}
+            aria-label="Filter by course"
+          >
+            <option value="All Courses">All Courses</option>
+            {courses.map(course => (
+              <option key={course.id} value={course.code}>
+                {course.code} - {course.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Filter bar */}
         <div className="filter-row">
@@ -181,24 +185,10 @@ function HomePage({
           ))}
         </div>
 
-        <div style={{ marginBottom: "10px" }}>
-          <select
-            className="form-select"
-            value={courseFilter}
-            onChange={(e) => onCourseFilterChange(e.target.value)}
-          >
-            <option value="All Courses">All Courses</option>
-
-            {courses.map(course => (
-              <option key={course.id} value={course.code}>
-                {course.code} - {course.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="task-list">
-          {filtered.length === 0 && (
+          {loading && <div className="empty-msg">Loading tasks...</div>}
+
+          {!loading && filtered.length === 0 && (
             <div className="empty-msg">No tasks here! 🎉</div>
           )}
 
@@ -212,22 +202,21 @@ function HomePage({
                 onClick={() =>
                   setOpenTaskId(openTaskId === t.id ? null : t.id)
                 }
-                style={{
-                  cursor: "pointer",
-                  background: PRIORITY_BG[displayPriority],
-                  borderLeft: `5px solid ${PRIORITY_BORDER[displayPriority]}`
-                }}
+                style={{ background: PRIORITY_BG[displayPriority] }}
               >
+                <input
+                  type="checkbox"
+                  className="task-check"
+                  checked={t.done}
+                  onClick={e => e.stopPropagation()}
+                  onChange={() => onToggle(t.id)}
+                  aria-label={`Mark ${t.name} as done`}
+                />
+
                 <div className="task-info">
                   <div className={`task-name ${t.done ? "task-name--done" : ""}`}>
-                    <strong>{t.code}</strong> - {t.name}
+                    {t.code} - {t.name}
                   </div>
-
-                  {openTaskId === t.id && (
-                    <div className="task-desc">
-                      {t.description}
-                    </div>
-                  )}
 
                   {t.link?.trim() && (
                     <a
@@ -235,15 +224,25 @@ function HomePage({
                       target="_blank"
                       rel="noreferrer"
                       className="task-link"
+                      title={t.link}
+                      onClick={e => e.stopPropagation()}
                     >
-                      {t.link.replace(/^https?:\/\//, "").slice(0, 30)}
-                      {t.link.length > 30 ? "..." : ""}
+                      {linkLabel(t.link)}
                     </a>
+                  )}
+
+                  {openTaskId === t.id && (
+                    <div className="task-desc">
+                      {t.description}
+                    </div>
                   )}
                 </div>
 
                 <div className="task-meta">
-                  <span className="task-date">{fmtDate(t.date)}</span>
+                  <span className="task-date">
+                    {fmtDate(t.date)}
+                    {!t.done && <span className="task-due"> · {dueLabel(daysUntil(t.date))}</span>}
+                  </span>
 
                   <span
                     className="task-priority"
@@ -253,19 +252,62 @@ function HomePage({
                   </span>
                 </div>
 
-                <input
-                  type="checkbox"
-                  className="task-check"
-                  checked={t.done}
-                  onChange={() => onToggle(t.id)}
-                  style={{ accentColor: PRIORITY_BORDER[displayPriority] }}
-                />
+                <button
+                  className="task-del-btn"
+                  title="Delete task"
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (window.confirm(`Delete "${t.name}"?`)) onDelete(t.id);
+                  }}
+                >
+                  🗑
+                </button>
               </div>
             );
           })}
 
         </div>
-      </div >
+      </div>
+
+      {/* Side column: countdown + course progress */}
+      <aside className="side-col">
+        <ExamCountdowns events={events} limit={1} compact />
+
+        <div className="side-card side-card--countdown">
+          <div className="side-card__title">Next deadline</div>
+          {nextTask ? (
+            <>
+              <div className="countdown-number">{nextDays === 0 ? "!" : nextDays}</div>
+              <div className="countdown-unit">
+                {nextDays === 0 ? "Due today" : nextDays === 1 ? "day left" : "days left"}
+              </div>
+              <div className="countdown-task">{nextTask.code} · {nextTask.name}</div>
+            </>
+          ) : (
+            <div className="side-empty">Nothing due. Enjoy your break! 🌿</div>
+          )}
+        </div>
+
+        <div className="side-card">
+          <div className="side-card__title">My courses</div>
+          {courses.length === 0 && <div className="side-empty">No courses yet.</div>}
+          {courses.map(c => {
+            const ct = tasks.filter(t => t.code === c.code);
+            const cd = ct.filter(t => t.done).length;
+            const pct = ct.length ? Math.round((cd / ct.length) * 100) : 0;
+            return (
+              <div key={c.id} className="mini-course">
+                <div className="mini-course__row">
+                  <span className="mini-course__code">{c.code}</span>
+                  <span className="mini-course__count">{cd}/{ct.length}</span>
+                </div>
+                <div className="pixel-bar"><div className="pixel-bar__fill" style={{ width: `${pct}%` }} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+      </div>
     </>
   );
 }
@@ -291,20 +333,30 @@ function AddTaskPage({ courses, onAdd }) {
       setError("Please fill in all required fields!");
       return;
     }
+    // Link is optional; if given, accept it with or without https://
+    const link = form.link.trim() ? normalizeUrl(form.link) : "";
+    if (form.link.trim() && !link) {
+      setError("That link doesn't look right. Paste a full link, or leave it empty.");
+      return;
+    }
     onAdd({
       ...form,
-      link: form.link || "#",
+      link,
       description: form.description || "No description"
     });
-    setForm({ code: "", name: "", link: "", date: "", priority: "Important" });
+    setForm({ code: "", name: "", description: "", link: "", date: "", priority: "Important" });
     setError("");
   };
 
   return (
-    <div className="task-panel" style={{ flex: 1 }}>
+    <div className="task-panel task-panel--padded">
       <div className="task-panel__title">Add New Task</div>
 
       {error && <div className="form-error">{error}</div>}
+
+      {courses.length === 0 && (
+        <div className="form-error">Add a course in My Course first, then you can add tasks to it.</div>
+      )}
 
       <form onSubmit={handleSubmit} className="add-form">
         <div className="form-row2">
@@ -345,11 +397,12 @@ function AddTaskPage({ courses, onAdd }) {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Link (Google Docs / URL)</label>
+          <label className="form-label">Link (optional)</label>
           <input
             className="form-input"
-            type="url"
-            placeholder="https://docs.google.com/..."
+            type="text"
+            inputMode="url"
+            placeholder="Google Docs, Drive or any link (optional)"
             value={form.link}
             onChange={e => set("link", e.target.value)}
           />
@@ -386,173 +439,291 @@ function AddTaskPage({ courses, onAdd }) {
   );
 }
 
-/* ── My Courses Page ── */
-function CoursesPage({ courses, tasks, onDeleteCourse, onAddCourse }) {
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [error, setError] = useState("");
-
-  const handleAdd = () => {
-    if (!code.trim() || !name.trim()) {
-      setError("Both fields are required!");
-      return;
-    }
-    if (courses.some(c => c.code.toLowerCase() === code.trim().toLowerCase())) {
-      setError("Course code already exists!");
-      return;
-    }
-    onAddCourse({ code: code.trim().toUpperCase(), name: name.trim() });
-    setCode("");
-    setName("");
-    setError("");
-  };
-
-  return (
-    <div className="task-panel" style={{ flex: 1, overflowY: "auto" }}>
-      <div className="task-panel__title">📚 My Courses</div>
-
-      {courses.length === 0 && <div className="empty-msg">No courses yet!</div>}
-
-      {courses.map(c => {
-        const courseTasks = tasks.filter(t => t.code === c.code);
-        const doneTasks = courseTasks.filter(t => t.done).length;
-        return (
-          <div key={c.id} className="course-card">
-            <button className="course-del-btn" onClick={() => onDeleteCourse(c.id)} title="Remove course">🗑</button>
-            <div className="course-code-label">{c.code}</div>
-            <div className="course-name-label">{c.name}</div>
-            <div className="course-progress">
-              Tasks: {doneTasks}/{courseTasks.length} done
-              {courseTasks.length > 0 && (
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${(doneTasks / courseTasks.length) * 100}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-
-      {/* Add course form */}
-      <div className="task-panel__title" style={{ marginTop: 12 }}>➕ Add Course</div>
-      {error && <div className="form-error">{error}</div>}
-      <div className="add-course-row">
-        <input
-          className="form-input"
-          placeholder="Code e.g. WIA2006"
-          value={code}
-          onChange={e => setCode(e.target.value)}
-          style={{ width: 130 }}
-        />
-        <input
-          className="form-input"
-          placeholder="Course Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          style={{ flex: 1 }}
-        />
-        <button className="submit-btn" style={{ width: "auto", padding: "6px 14px" }} onClick={handleAdd}>
-          Add
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ── Root App ── */
-export default function MainApp({ avatar }) {
-
-
+export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
   const [page, setPage] = useState("home");
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
-  const [courses, setCourses] = useState(INITIAL_COURSES);
-  const [nextId, setNextId] = useState(5);
-  const [nextCId, setNextCId] = useState(5);
   const [filter, setFilter] = useState("All");
   const [courseFilter, setCourseFilter] = useState("All Courses");
   const [flash, setFlash] = useState("");
+  const [saveError, setSaveError] = useState("");
+
+  // Live data from Firestore. Changes made below show up here automatically.
+  const tasksState = useUserCollection(uid, "tasks", "date");
+  const coursesState = useUserCollection(uid, "courses", "code");
+  const eventsState = useUserCollection(uid, "events", "date");
+  const events = eventsState.items;
+  const tasks = tasksState.items;
+  const courses = coursesState.items;
+  const goalsState = useUserCollection(uid, "goals", "createdAt");
+  const goals = goalsState.items;
+  const loadError = tasksState.error || coursesState.error || eventsState.error || goalsState.error;
+
+  // Latest profile for callbacks that run later (timer finishing, petting)
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
+
+  // Firestore updates the screen right away and saves in the background,
+  // so we don't wait for these; we only report a failed save.
+  const save = (promise) =>
+    promise.catch(err => {
+      console.error("Save failed", err);
+      setSaveError("Couldn't save your change. Check your connection.");
+    });
 
   /* Task actions */
-  const toggleTask = (id) =>
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  const toggleTask = (id) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    // Rewards only the first time a task is finished, so un-ticking/re-ticking can't farm coins
+    if (!task.done && !task.rewarded) {
+      save(updateTask(uid, id, { done: true, rewarded: true }));
+      grant(REWARDS.task.xp, REWARDS.task.coins, `${task.name} done!`);
+    } else {
+      save(updateTask(uid, id, { done: !task.done }));
+    }
+  };
 
-  const deleteTask = (id) =>
-    setTasks(prev => prev.filter(t => t.id !== id));
+  const deleteTask = (id) => save(dbDeleteTask(uid, id));
 
   const addTask = (data) => {
-    setTasks(prev => [...prev, { ...data, id: nextId, done: false }]);
-    setNextId(n => n + 1);
+    save(dbAddTask(uid, data));
     setFlash("Task added! ✔");
     setTimeout(() => setFlash(""), 2500);
     setPage("home");
   };
 
   /* Course actions */
-  const deleteCourse = (id) =>
-    setCourses(prev => prev.filter(c => c.id !== id));
+  const deleteCourse = (id) => save(dbDeleteCourse(uid, id));
 
-  const addCourse = (data) => {
-    setCourses(prev => [...prev, { ...data, id: nextCId }]);
-    setNextCId(n => n + 1);
+  const addCourse = (data) => save(dbAddCourse(uid, data));
+
+  const updateCourse = (id, changes) => save(dbUpdateCourse(uid, id, changes));
+
+  /* Calendar actions */
+  const addEvent = (data) => {
+    save(dbAddEvent(uid, data));
+    setFlash(`${data.title} added to your calendar! ✔`);
+    setTimeout(() => setFlash(""), 2500);
   };
+
+  const deleteEvent = (id) => save(dbDeleteEvent(uid, id));
+
+  /* Goals */
+  const addGoal = (data) => save(dbAddGoal(uid, data));
+  const updateGoal = (id, changes) => {
+    const goal = goals.find(g => g.id === id);
+    if (changes.done && goal && !goal.rewarded) {
+      save(dbUpdateGoal(uid, id, { ...changes, rewarded: true }));
+      grant(REWARDS.goal.xp, REWARDS.goal.coins, "Goal achieved! 🎯");
+    } else {
+      save(dbUpdateGoal(uid, id, changes));
+    }
+  };
+  const deleteGoal = (id) => save(dbDeleteGoal(uid, id));
+
+  /* Pet + focus timer */
+  const showFlash = (msg) => {
+    setFlash(msg);
+    setTimeout(() => setFlash(""), 3000);
+  };
+
+  /* Levels + rewards */
+  const [wardrobeOpen, setWardrobeOpen] = useState(false);
+  const [levelUp, setLevelUp] = useState(null);
+
+  // Adds XP and coins (plus any other profile changes) and celebrates level-ups
+  function grant(xpGain, coinGain, label, moreChanges = {}) {
+    const p = profileRef.current;
+    const before = levelInfo(p.xp).level;
+    const xp = (p.xp || 0) + xpGain;
+    const coins = (p.coins || 0) + coinGain;
+    const changes = { ...moreChanges, xp, coins };
+    profileRef.current = { ...p, ...changes }; // so a second reward right after adds up correctly
+    save(onUpdateProfile(changes));
+    playSound("coin");
+    showFlash(`${label}  +${xpGain} XP  +${coinGain} 🪙`);
+    const after = levelInfo(xp).level;
+    if (after > before) {
+      setLevelUp(after);
+      setTimeout(() => playSound("levelUp"), 350);
+    }
+  }
+
+  const buyItem = (item) => {
+    const p = profileRef.current;
+    const owned = p.owned || [];
+    if (owned.includes(item.id) || (p.coins || 0) < item.price || levelInfo(p.xp).level < item.level) return;
+    const changes = {
+      coins: (p.coins || 0) - item.price,
+      owned: [...owned, item.id],
+      equipped: { ...(p.equipped || {}), [item.slot]: item.id },
+    };
+    profileRef.current = { ...p, ...changes };
+    save(onUpdateProfile(changes));
+    playSound("buy");
+    showFlash(`Bought ${item.name}! ✨`);
+  };
+
+  const equipItem = (slot, id) => {
+    const p = profileRef.current;
+    const changes = { equipped: { ...(p.equipped || {}), [slot]: id } };
+    profileRef.current = { ...p, ...changes };
+    save(onUpdateProfile(changes));
+    playSound("click");
+  };
+
+  const streakDays = currentStreak(profile.streak);
+
+  const adoptPet = (pet) => {
+    save(onUpdateProfile({ pet, petLove: 0 }));
+    showFlash(`Welcome home, ${pet.name}! 🏡`);
+  };
+
+  // Petting saves at most every few seconds so rapid clicks don't spam Firestore
+  const pendingLove = useRef(0);
+  const loveTimer = useRef(null);
+  const petThePet = () => {
+    pendingLove.current += 1;
+    if (loveTimer.current) return;
+    loveTimer.current = setTimeout(() => {
+      const add = pendingLove.current;
+      pendingLove.current = 0;
+      loveTimer.current = null;
+      save(onUpdateProfile({ petLove: (profileRef.current.petLove || 0) + add }));
+    }, 1500);
+  };
+
+  const timer = usePomodoro((mode) => {
+    if (mode !== "focus") {
+      showFlash("Break's over! Ready for another round? 💪");
+      return;
+    }
+    const p = profileRef.current;
+    const today = todayKey();
+    const count = p.focusToday?.date === today ? p.focusToday.count + 1 : 1;
+    const { streak, bonus } = nextStreak(p.streak);
+    grant(
+      REWARDS.focus.xp,
+      REWARDS.focus.coins + bonus,
+      bonus ? `Focus session! 🔥 ${streak.count}-day streak bonus` : `Focus session! 🍅 ${count} today`,
+      { focusSessions: (p.focusSessions || 0) + 1, focusToday: { date: today, count }, streak }
+    );
+  });
+
+  // Show the countdown in the browser tab while the timer runs
+  useEffect(() => {
+    document.title = timer.running
+      ? `${formatClock(timer.left)} · ${MODE_LABELS[timer.mode]}`
+      : "StudentLife";
+  }, [timer.running, timer.left, timer.mode]);
+
+  const spotify = useSpotify();
+  const popOut = usePopOut(setSaveError);
+  // Always offer the button; if floating isn't possible here, clicking it explains why
+  const popOutAvailable = true;
+
+  // Focus → writing, short break → coffee, long break → nap
+  const petState = !timer.running ? "idle"
+    : timer.mode === "focus" ? "work"
+      : timer.mode === "short" ? "break"
+        : "sleep";
+
+  const firstName = profile.isGuest
+    ? "Guest"
+    : (profile.displayName || "Student").split(" ")[0];
+  const todayLabel = new Date().toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const dueThisWeek = tasks.filter(t => {
+    const days = daysUntil(t.date);
+    return !t.done && days !== null && days >= 0 && days <= 7;
+  }).length;
+  const buddyMessage =
+    timer.running && timer.mode === "focus" ? `Focus time! ${formatClock(timer.left)} left. I'm studying with you 📖`
+      : timer.running && timer.mode === "short" ? `Coffee break ☕ ${formatClock(timer.left)}. Stretch a little!`
+      : timer.running ? `Nap time 💤 ${formatClock(timer.left)}. Rest your eyes!`
+      : !profile.pet ? "Adopt a study buddy in Focus! 🐾"
+      : tasks.length === 0 ? "Let's add your first task!"
+      : dueThisWeek === 0 ? "No deadlines this week. Nice!"
+        : dueThisWeek === 1 ? "1 task due this week. You got this!"
+          : `${dueThisWeek} tasks due this week. You got this!`;
 
   const navItems = [
     { key: "home", label: "Home" },
     { key: "add", label: "Add Task" },
+    { key: "calendar", label: "Calendar" },
+    { key: "focus", label: timer.running ? `Focus ${formatClock(timer.left)}` : "Focus" },
     { key: "courses", label: "My Course" },
   ];
 
   return (
-    <div className="screen">
-      <div className="app">
+    <div className="app">
         {/* Sidebar */}
         <aside className="sidebar">
           <div className="logo-row">
             <img
               src="/image/logo.png"
-              alt="Logo"
+              alt=""
               className="logo-iconL"
             />
             <span className="logo-text">StudentLife</span>
           </div>
-          <div className="avatar-wrap">
-            <div className="avatar-border">
-              {avatar ? (
-                <img src={avatar} className="avatar-img" />
-              ) : (
-                <div className="avatar-fallback">🙂</div>
-              )}
-            </div>
+          <div className="avatar-border">
+            {profile.character ? (
+              <img src={`/image/${profile.character}.png`} alt="Your character" className="avatar-img" />
+            ) : (
+              <div className="avatar-fallback">🙂</div>
+            )}
           </div>
-          {navItems.map(({ key, label }) => (
-            <button
-              key={key}
-              className={`nav-btn ${page === key ? "nav-btn--active" : ""}`}
-              onClick={() => setPage(key)}
-            >
-              {label}
+          <div className="user-name" title={profile.displayName}>
+            {profile.isGuest ? "Guest" : profile.displayName}
+          </div>
+          <nav className="sidebar-nav">
+            {navItems.map(({ key, label }) => (
+              <button
+                key={key}
+                className={`nav-btn ${page === key ? "nav-btn--active" : ""}`}
+                onClick={() => setPage(key)}
+              >
+                {label}
+              </button>
+            ))}
+            <button className="nav-btn nav-btn--signout" onClick={onSignOut}>
+              Log out
             </button>
-          ))}
-          <div className="sidebar-deco">
-            <img
-              src="/image/tree.png"
-              alt="Logo"
-              className="logo-iconT"
-            />
-            <img
-              src="/image/tree.png"
-              alt="Logo"
-              className="logo-iconT"
-            />
-          </div>
+          </nav>
         </aside>
 
         {/* Main */}
         <main className="content">
+          <header className="top-banner">
+            <div>
+              <div className="banner-greeting">Hi, {firstName}!</div>
+              <div className="banner-date">{todayLabel}</div>
+              <ProgressBadge profile={profile} streak={streakDays} compact />
+            </div>
+            <div className="banner-buddy">
+              <div className="speech-bubble">{buddyMessage}</div>
+              {profile.pet ? (
+                <Pet type={profile.pet.type} name={profile.pet.name} state={petState} size={56} onPet={petThePet} gear={profile.equipped} />
+              ) : profile.character && (
+                <img src={`/image/${profile.character}.png`} alt="" className="banner-sprite" />
+              )}
+            </div>
+          </header>
           {flash && <div className="flash-msg">{flash}</div>}
+          {loadError && (
+            <div className="form-error">Couldn't load your data. Check your connection and refresh.</div>
+          )}
+          {saveError && (
+            <div className="form-error" onClick={() => setSaveError("")} title="Click to dismiss">
+              {saveError}
+            </div>
+          )}
 
           {page === "home" && (
             <HomePage
@@ -564,10 +735,39 @@ export default function MainApp({ avatar }) {
               onFilterChange={setFilter}
               courseFilter={courseFilter}
               onCourseFilterChange={setCourseFilter}
+              loading={tasksState.loading}
+              events={events}
             />
           )}
           {page === "add" && (
             <AddTaskPage courses={courses} onAdd={addTask} />
+          )}
+          {page === "focus" && (
+            <FocusPage
+              timer={timer}
+              profile={profile}
+              petState={petState}
+              onPet={petThePet}
+              onAdopt={adoptPet}
+              goals={goals}
+              onAddGoal={addGoal}
+              onUpdateGoal={updateGoal}
+              onDeleteGoal={deleteGoal}
+              onPopOut={popOutAvailable ? popOut.open : null}
+              popOutOpen={!!popOut.pipWindow}
+              spotify={spotify}
+              streak={streakDays}
+              onOpenWardrobe={() => setWardrobeOpen(true)}
+            />
+          )}
+          {page === "calendar" && (
+            <CalendarPage
+              events={events}
+              tasks={tasks}
+              courses={courses}
+              onAddEvent={addEvent}
+              onDeleteEvent={deleteEvent}
+            />
           )}
           {page === "courses" && (
             <CoursesPage
@@ -575,10 +775,44 @@ export default function MainApp({ avatar }) {
               tasks={tasks}
               onDeleteCourse={deleteCourse}
               onAddCourse={addCourse}
+              onUpdateCourse={updateCourse}
             />
           )}
         </main>
-      </div>
+
+        {/* Floating timer on other pages, and the always-on-top pop-out window */}
+        <FloatingTimer
+          timer={timer}
+          pet={profile.pet}
+          petState={petState}
+          character={profile.character}
+          hidden={page === "focus" || !!popOut.pipWindow}
+          onOpenFocus={() => setPage("focus")}
+          onPopOut={popOutAvailable ? popOut.open : null}
+          spotify={spotify}
+          gear={profile.equipped}
+        />
+        <PopOutTimer
+          pipWindow={popOut.pipWindow}
+          timer={timer}
+          pet={profile.pet}
+          petState={petState}
+          character={profile.character}
+          spotify={spotify}
+          gear={profile.equipped}
+        />
+
+        {wardrobeOpen && (
+          <Wardrobe
+            profile={profile}
+            onBuy={buyItem}
+            onEquip={equipItem}
+            onClose={() => setWardrobeOpen(false)}
+          />
+        )}
+        {levelUp && (
+          <LevelUpModal level={levelUp} profile={profile} onClose={() => setLevelUp(null)} />
+        )}
     </div>
   );
 }
