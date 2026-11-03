@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 .env.*
+
+# Allow the example env file to be committed
+!.env.example

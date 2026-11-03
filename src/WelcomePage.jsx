@@ -1,53 +1,53 @@
 import { useState } from "react";
+import PixelWindow from "./PixelWindow";
 import "./Welcome.css";
+
+const CHARACTERS = [
+  { id: "girl", src: "/image/girl.png" },
+  { id: "boy", src: "/image/boy.png" },
+];
 
 export default function WelcomePage({ onStart }) {
   const [selected, setSelected] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  const handleStart = () => {
-    onStart(selected); // "boy" or "girl"
+  const handleStart = async () => {
+    setSaving(true);
+    try {
+      await onStart(selected); // "boy" or "girl"
+    } catch {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="welcome-screen">
-
-      <div className="welcome-bg-text">
-        Hi! Welcome to StudentLife
-      </div>
-
-      <div className="character-box">
-
-        <div className="box-subtitle">
-          Choose your character!
-        </div>
+      <PixelWindow>
+        <div className="window-heading">Choose your character!</div>
 
         <div className="character-row">
-
-          <div
-            className={`character-card ${selected === "girl" ? "active" : ""}`}
-            onClick={() => setSelected("girl")}
-          >
-            <img src="/image/girl.png" alt="girl" />
-          </div>
-
-          <div
-            className={`character-card ${selected === "boy" ? "active" : ""}`}
-            onClick={() => setSelected("boy")}
-          >
-            <img src="/image/boy.png" alt="boy" />
-          </div>
-
+          {CHARACTERS.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              className={`character-card ${selected === c.id ? "active" : ""}`}
+              onClick={() => setSelected(c.id)}
+              aria-pressed={selected === c.id}
+              aria-label={c.id}
+            >
+              <img src={c.src} alt="" />
+            </button>
+          ))}
         </div>
 
         <button
-          className="start-btn"
-          disabled={!selected}
+          className="pixel-btn"
+          disabled={!selected || saving}
           onClick={handleStart}
         >
-          Start
+          {saving ? "Saving..." : "Start"}
         </button>
-
-      </div>
+      </PixelWindow>
     </div>
   );
 }
