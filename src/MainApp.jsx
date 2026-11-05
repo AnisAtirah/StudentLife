@@ -27,6 +27,10 @@ import { useSpotify } from "./spotify";
 import Wardrobe, { LevelUpModal, ProgressBadge } from "./Wardrobe";
 import { REWARDS, currentStreak, levelInfo, nextStreak } from "./rewards";
 import { playSound } from "./sounds";
+import { usePetTalk } from "./petTalk";
+import PetBubble from "./PetBubble";
+import ProfileEditor from "./ProfileEditor";
+import Avatar from "./Avatar";
 
 
 // Colors from the Canva design: label color and row background per priority
@@ -574,6 +578,14 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
 
   const streakDays = currentStreak(profile.streak);
 
+  const [profileOpen, setProfileOpen] = useState(false);
+  const saveProfileEdits = (changes, petReset) => {
+    profileRef.current = { ...profileRef.current, ...changes };
+    save(onUpdateProfile(changes));
+    setProfileOpen(false);
+    showFlash(petReset ? `Say hi to ${changes.pet.name}! Fresh start 🌱` : "Profile updated! ✔");
+  };
+
   const adoptPet = (pet) => {
     save(onUpdateProfile({ pet, petLove: 0 }));
     showFlash(`Welcome home, ${pet.name}! 🏡`);
@@ -583,6 +595,7 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
   const pendingLove = useRef(0);
   const loveTimer = useRef(null);
   const petThePet = () => {
+    talkRef.current?.next(); // petting makes it say something new
     pendingLove.current += 1;
     if (loveTimer.current) return;
     loveTimer.current = setTimeout(() => {
@@ -593,7 +606,9 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
     }, 1500);
   };
 
+  const talkRef = useRef(null);
   const timer = usePomodoro((mode) => {
+    talkRef.current?.cheer(mode); // pet celebrates the end of the session
     if (mode !== "focus") {
       showFlash("Break's over! Ready for another round? 💪");
       return;
@@ -628,9 +643,7 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
       : timer.mode === "short" ? "break"
         : "sleep";
 
-  const firstName = profile.isGuest
-    ? "Guest"
-    : (profile.displayName || "Student").split(" ")[0];
+  const firstName = (profile.displayName || (profile.isGuest ? "Guest" : "Student")).split(" ")[0];
   const todayLabel = new Date().toLocaleDateString("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -642,15 +655,23 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
     const days = daysUntil(t.date);
     return !t.done && days !== null && days >= 0 && days <= 7;
   }).length;
-  const buddyMessage =
-    timer.running && timer.mode === "focus" ? `Focus time! ${formatClock(timer.left)} left. I'm studying with you 📖`
-      : timer.running && timer.mode === "short" ? `Coffee break ☕ ${formatClock(timer.left)}. Stretch a little!`
-      : timer.running ? `Nap time 💤 ${formatClock(timer.left)}. Rest your eyes!`
-      : !profile.pet ? "Adopt a study buddy in Focus! 🐾"
+  // Task-aware lines mixed into what the pet says when the timer isn't running
+  const taskMessage =
+    !profile.pet ? "Adopt a study buddy in Focus! 🐾"
       : tasks.length === 0 ? "Let's add your first task!"
       : dueThisWeek === 0 ? "No deadlines this week. Nice!"
         : dueThisWeek === 1 ? "1 task due this week. You got this!"
           : `${dueThisWeek} tasks due this week. You got this!`;
+
+  // Motivation, fun facts and break tips in the pet's speech bubble
+  const talk = usePetTalk({
+    mode: timer.mode,
+    running: timer.running,
+    petName: profile.pet?.name,
+    userName: firstName,
+    extraIdle: [taskMessage],
+  });
+  talkRef.current = talk;
 
   const navItems = [
     { key: "home", label: "Home" },
@@ -674,14 +695,17 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
           </div>
           <div className="avatar-border">
             {profile.character ? (
-              <img src={`/image/${profile.character}.png`} alt="Your character" className="avatar-img" />
+              <Avatar character={profile.character} accessory={profile.avatarAccessory} className="avatar-img" alt="Your avatar" />
             ) : (
               <div className="avatar-fallback">🙂</div>
             )}
           </div>
           <div className="user-name" title={profile.displayName}>
-            {profile.isGuest ? "Guest" : profile.displayName}
+            {profile.displayName || "Guest"}
           </div>
+          <button className="edit-profile-btn" onClick={() => setProfileOpen(true)}>
+            ✎ Edit profile
+          </button>
           <nav className="sidebar-nav">
             {navItems.map(({ key, label }) => (
               <button
@@ -707,11 +731,11 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
               <ProgressBadge profile={profile} streak={streakDays} compact />
             </div>
             <div className="banner-buddy">
-              <div className="speech-bubble">{buddyMessage}</div>
+              <PetBubble talk={talk} className="speech-bubble" />
               {profile.pet ? (
                 <Pet type={profile.pet.type} name={profile.pet.name} state={petState} size={56} onPet={petThePet} gear={profile.equipped} />
               ) : profile.character && (
-                <img src={`/image/${profile.character}.png`} alt="" className="banner-sprite" />
+                <Avatar character={profile.character} accessory={profile.avatarAccessory} className="banner-sprite" />
               )}
             </div>
           </header>
@@ -744,6 +768,7 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
           )}
           {page === "focus" && (
             <FocusPage
+              talk={talk}
               timer={timer}
               profile={profile}
               petState={petState}
@@ -782,10 +807,12 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
 
         {/* Floating timer on other pages, and the always-on-top pop-out window */}
         <FloatingTimer
+          talk={talk}
           timer={timer}
           pet={profile.pet}
           petState={petState}
           character={profile.character}
+          accessory={profile.avatarAccessory}
           hidden={page === "focus" || !!popOut.pipWindow}
           onOpenFocus={() => setPage("focus")}
           onPopOut={popOutAvailable ? popOut.open : null}
@@ -793,11 +820,13 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
           gear={profile.equipped}
         />
         <PopOutTimer
+          talk={talk}
           pipWindow={popOut.pipWindow}
           timer={timer}
           pet={profile.pet}
           petState={petState}
           character={profile.character}
+          accessory={profile.avatarAccessory}
           spotify={spotify}
           gear={profile.equipped}
         />
@@ -808,6 +837,13 @@ export default function MainApp({ uid, profile, onSignOut, onUpdateProfile }) {
             onBuy={buyItem}
             onEquip={equipItem}
             onClose={() => setWardrobeOpen(false)}
+          />
+        )}
+        {profileOpen && (
+          <ProfileEditor
+            profile={profile}
+            onSave={saveProfileEdits}
+            onClose={() => setProfileOpen(false)}
           />
         )}
         {levelUp && (

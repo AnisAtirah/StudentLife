@@ -17,7 +17,8 @@ import { db } from "./firebase";
 
 /*
  * Data layout (every user only sees their own branch, see firestore.rules):
- *   users/{uid}                 profile: displayName, isGuest, character,
+ *   users/{uid}                 profile: displayName, isGuest, character (e.g. "mei-uniform"),
+ *                               avatarAccessory (none|crown|gradcap|headphones),
  *                               pet { type, name }, petLove, focusSessions,
  *                               focusToday { date, count }, xp, coins,
  *                               streak { count, lastDate }, owned [itemId],
@@ -162,9 +163,6 @@ export async function deleteUserData(uid) {
   batch.delete(userDoc(uid));
   await batch.commit();
 }
-
-export const saveCharacter = (uid, character) =>
-  updateDoc(userDoc(uid), { character });
 
 /* Any profile fields: pet, petLove, focusSessions, focusToday... */
 export const saveProfile = (uid, changes) => updateDoc(userDoc(uid), changes);

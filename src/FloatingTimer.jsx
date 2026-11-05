@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PetSprite } from "./Pet";
+import Avatar from "./Avatar";
 import { MODE_LABELS, formatClock } from "./usePomodoro";
 import { SoundToggle } from "./sounds";
 import SpotifyPlayer from "./SpotifyPlayer";
+import PetBubble from "./PetBubble";
 import { spotifyConfigured } from "./spotify";
 
 const SCENES = { focus: "day", short: "sunset", long: "night" };
@@ -108,17 +110,18 @@ function Controls({ timer }) {
 }
 
 /* What shows inside the pop-out window. */
-export function PopOutTimer({ pipWindow, timer, pet, petState, character, spotify, gear }) {
+export function PopOutTimer({ pipWindow, timer, pet, petState, character, accessory, spotify, gear, talk }) {
   if (!pipWindow) return null;
   return createPortal(
     <div className={`pip-timer pet-stage--${SCENES[timer.mode]}`}>
       <SoundToggle className="pip-sound" />
       <div className="pip-timer__mode">{MODE_LABELS[timer.mode]}</div>
+      <PetBubble talk={talk} className="pet-bubble--pip" />
       <div className="pip-timer__pet">
         {pet ? (
           <PetSprite type={pet.type} state={petState} size={112} gear={gear} />
         ) : (
-          <img src={`/image/${character || "girl"}.png`} alt="" width="96" />
+          <Avatar character={character} accessory={accessory} size={96} />
         )}
       </div>
       <div className="pip-timer__clock">{formatClock(timer.left)}</div>
@@ -143,7 +146,7 @@ function loadPos() {
 }
 
 /* Small draggable timer that floats over the app on every page except Focus. */
-export function FloatingTimer({ timer, pet, petState, character, onOpenFocus, onPopOut, hidden, spotify, gear }) {
+export function FloatingTimer({ timer, pet, petState, character, accessory, onOpenFocus, onPopOut, hidden, spotify, gear, talk }) {
   const boxRef = useRef(null);
   const drag = useRef(null);
   const [pos, setPos] = useState(loadPos);
@@ -211,10 +214,11 @@ export function FloatingTimer({ timer, pet, petState, character, onOpenFocus, on
         {pet ? (
           <PetSprite type={pet.type} state={petState} size={56} gear={gear} />
         ) : (
-          <img src={`/image/${character || "girl"}.png`} alt="" width="48" className="mini-timer__char" />
+          <Avatar character={character} accessory={accessory} size={48} className="mini-timer__char" />
         )}
         <div className="mini-timer__clock">{formatClock(timer.left)}</div>
       </div>
+      <PetBubble talk={talk} className="pet-bubble--mini" />
       <Controls timer={timer} />
       {spotify && <SpotifyPlayer spotify={spotify} size="mini" />}
     </div>

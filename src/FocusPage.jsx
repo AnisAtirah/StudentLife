@@ -3,6 +3,7 @@ import Pet, { PET_TYPES, PetSprite } from "./Pet";
 import PixelWindow from "./PixelWindow";
 import SpotifyPlayer from "./SpotifyPlayer";
 import { ProgressBadge } from "./Wardrobe";
+import PetBubble from "./PetBubble";
 import { MODE_LABELS, PRESETS, formatClock } from "./usePomodoro";
 import { todayKey } from "./dateUtils";
 import { SoundToggle, playSound, setSoundSettings, useSoundSettings } from "./sounds";
@@ -10,7 +11,7 @@ import { SoundToggle, playSound, setSoundSettings, useSoundSettings } from "./so
 export const GOAL_COLORS = ["#fff3a0", "#ffc9de", "#c6e8ff", "#d4f5b5", "#ffd9a8"];
 const TILTS = [-2, 1.5, -1, 2, -1.5, 1];
 
-export default function FocusPage({ timer, profile, petState, onPet, onAdopt, goals, onAddGoal, onUpdateGoal, onDeleteGoal, onPopOut, popOutOpen, spotify, streak, onOpenWardrobe }) {
+export default function FocusPage({ timer, profile, petState, onPet, onAdopt, goals, onAddGoal, onUpdateGoal, onDeleteGoal, onPopOut, popOutOpen, spotify, streak, onOpenWardrobe, talk }) {
   const pet = profile.pet;
   const today = profile.focusToday?.date === todayKey() ? profile.focusToday.count : 0;
 
@@ -36,6 +37,7 @@ export default function FocusPage({ timer, profile, petState, onPet, onAdopt, go
             {pet ? (
               <>
                 <button className="wardrobe-btn" onClick={onOpenWardrobe} title="Dress up your pet">👕 Wardrobe</button>
+                <PetBubble talk={talk} className="pet-bubble--stage" />
                 <Pet type={pet.type} name={pet.name} state={petState} size={168} onPet={onPet} gear={profile.equipped} />
                 <div className="pet-stage__name">
                   {pet.name} <span className="pet-love">❤ {profile.petLove || 0}</span>
