@@ -14,6 +14,7 @@ Built with **React + Vite**, **Firebase** (Google sign-in + Firestore), and host
   - The pet cheers you on with motivation, fun facts and break tips
   - XP, coins, daily streaks and a Wardrobe of hats, glasses and desk items
 
+
 ## Run it on your computer (localhost)
 
 ### 1. Install Node.js
@@ -22,6 +23,15 @@ Install **Node.js LTS** from https://nodejs.org. Check it worked:
 node -v
 npm -v
 ```
+
+> **Windows: `npm.ps1 cannot be loaded because running scripts is disabled`**
+> Run this once in PowerShell, then reopen the terminal:
+> ```
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+> ```
+> Or type `npm.cmd` instead of `npm` (e.g. `npm.cmd run dev`).
+>
+> **`npm` not recognized right after installing Node?** Close VS Code completely and open it again.
 
 ### 2. Get the code and install packages
 ```

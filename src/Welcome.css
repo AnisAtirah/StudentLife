@@ -192,3 +192,69 @@
   .character-card { width: 120px; height: 160px; }
   .character-card img { width: 118px; }
 }
+
+/* ── Avatar picker (sign-up and Edit profile) ── */
+.avatar-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.avatar-picker__preview {
+  width: 132px;
+  height: 132px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(#a8dcf2, #d9f1fb);
+  border-radius: 22px 22px 8px 8px;
+  box-shadow: 0 0 0 4px #1d1d1d, inset -6px -6px 0 0 #8fc6dd;
+}
+
+.avatar-picker__tabs { display: flex; gap: 10px; margin: 6px 0 2px; }
+
+.avatar-tab {
+  padding: 8px 16px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #1d1d1d;
+  background: #fff;
+  border: 3px solid #1d1d1d;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.avatar-tab.active { background: var(--sun-yellow, #ffe36e); }
+
+.avatar-picker__label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  margin-top: 4px;
+}
+
+.avatar-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.avatar-chip {
+  width: 84px;
+  padding: 6px 4px 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: #e4e3dc;
+  border: 3px solid #1d1d1d;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform .12s, background .12s;
+}
+.avatar-chip span { font-family: 'Press Start 2P', monospace; font-size: 8px; color: #1d1d1d; }
+.avatar-chip:hover { transform: translateY(-2px); }
+.avatar-chip.active { background: #fff1b8; box-shadow: 0 0 0 3px var(--sun-yellow, #ffe36e); transform: translateY(-2px); }
+
+.avatar-chip--small { width: 66px; }
+.avatar-chip--small span { font-size: 6px; }

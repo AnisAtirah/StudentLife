@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { deleteUser, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
-import { deleteUserData, ensureProfile, saveCharacter, saveProfile } from "./db";
+import { deleteUserData, ensureProfile, saveProfile } from "./db";
 import LoginPage from "./LoginPage";
 import WelcomePage from "./WelcomePage";
 import MainApp from "./MainApp";
@@ -29,10 +29,10 @@ export default function App() {
     });
   }, []);
 
-  const handleSelectCharacter = async (character) => {
+  const handleSelectCharacter = async (character, avatarAccessory = "none") => {
     const { user, profile } = session;
-    await saveCharacter(user.uid, character);
-    setSession({ status: "ready", user, profile: { ...profile, character } });
+    await saveProfile(user.uid, { character, avatarAccessory });
+    setSession({ status: "ready", user, profile: { ...profile, character, avatarAccessory } });
   };
 
   // Updates the screen right away, then saves to Firestore.
