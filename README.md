@@ -13,7 +13,7 @@ Built with **React + Vite**, **Firebase** (Google sign-in + Firestore), and host
   - Floating mini timer, plus a pop-out window that stays on top of other apps (Chrome/Edge)
   - The pet cheers you on with motivation, fun facts and break tips
   - XP, coins, daily streaks and a Wardrobe of hats, glasses and desk items
-  - Goal sticky notes, 8-bit sounds, and Spotify Premium controls
+
 
 ## Run it on your computer (localhost)
 
