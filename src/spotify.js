@@ -207,8 +207,20 @@ async function api(path, { method = "GET", body } = {}) {
   });
   if (res.status === 204 || res.status === 202) return null;
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new SpotifyError(res.status, explain(res.status, data?.error?.reason));
+  // Spotify sometimes answers with plain text instead of JSON, so don't assume JSON
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    // Apps in Development mode only work for Spotify accounts added under "User Management"
+    if (res.status === 403 && /not be registered/i.test(text)) {
+      throw new SpotifyError(403, "This Spotify account isn't allowed to use the app yet. Add its email under User Management in the Spotify Developer Dashboard, then connect again.");
+    }
+    throw new SpotifyError(res.status, explain(res.status, data?.error?.reason));
+  }
   return data;
 }
 
